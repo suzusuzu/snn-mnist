@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["suzusuzu <suzuzusu123@icloud.com>"]
 
 [dependencies]
+rand = "0.4.2"
+image = "*"
