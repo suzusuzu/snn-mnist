@@ -10,14 +10,6 @@ pub fn conv(img: &Vec<Vec<u8>>, width:usize, height:usize) -> Vec<Vec<f64>>{
                                 vec![w3, w1, w0, w1, w3],
                                 vec![w4, w2, w1, w2, w4],
                                 vec![w5, w4, w3, w4, w5]];
-    /*
-    let w: Vec<Vec<f64>> = vec![vec![0.0, 0.0, 0.0, 0.0, 0.0],
-                                vec![0.0, 0.0, 0.0, 0.0, 0.0],
-                                vec![0.0, 0.0, 1.0, 0.0, 0.0],
-                                vec![0.0, 0.0, 0.0, 0.0, 0.0],
-                                vec![0.0, 0.0, 0.0, 0.0, 0.0]];
-                                       */
-
 
     let mut pot = vec![vec![0.0; width]; height];
     for i in 0..height {

@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::{Rng, SeedableRng, XorShiftRng};
 
 fn rk4<F: Fn(f64)->f64>(f: F, y: f64, dt: f64) -> f64 {
     let k1 = dt * f(y);
@@ -19,10 +19,8 @@ pub struct Neuron {
 }
 
 impl Neuron {
-    pub fn new(v_init: f64, e_l: f64, theta: f64, dt: f64, num_inputs: usize, refactory_period: usize) -> Neuron {
-
-        // let weights: Vec<f64> = thread_rng().gen_iter().map(|x: f64| x / 6.0).take(num_inputs).collect();
-        let weights: Vec<f64> = thread_rng().gen_iter().take(num_inputs).collect();
+    pub fn new(v_init: f64, e_l: f64, theta: f64, dt: f64, num_inputs: usize, refactory_period: usize, rng: &mut XorShiftRng) -> Neuron {
+        let weights: Vec<f64> = rng.gen_iter().take(num_inputs).collect();
         Neuron {
             v: v_init,
             e_l: e_l,
@@ -64,10 +62,10 @@ impl Neuron {
     pub fn update(&mut self, inputs: &Vec<Vec<u8>>, spike_history: &Vec<u8>, interval: usize) {
         // stdp learning
 
-        const EPSILON: f64 = 0.0001;
-        const TAU: f64 = 0.005;
-        const TAU_: f64 = 0.005;
-        const MAX_W: f64 = 1.0;
+        const TAU_P: f64 = 0.005;
+        const TAU_M: f64 = 0.005;
+        const A_P: f64 = 0.2;
+        const A_M: f64 = 0.15;
         const MIN_W: f64 = 0.0;
 
         let t_len = inputs[0].len();
@@ -82,8 +80,7 @@ impl Neuron {
                         let t_b = -j - 1;
                         if ((t as i64)+t_b) > 0 && inputs[i][((t as i64) +t_b) as usize] == 1 {
                             // update weight
-                            // println!("{}",  1.0 * (((t_b as f64)*self.dt) / TAU_).exp() );
-                            self.weights[i] += 0.2 * (((t_b as f64)*self.dt) / TAU).exp();
+                            self.weights[i] += A_P * (((t_b as f64)*self.dt) / TAU_P).exp();
                         }
                     }
 
@@ -93,7 +90,7 @@ impl Neuron {
                         let t_f = j + 1;
                         if (t+t_f) < t_len && inputs[i][t+t_f] == 1 {
                             // down weight
-                            self.weights[i] -= 0.15 * ((-(t_f as f64)*self.dt) / TAU_).exp();
+                            self.weights[i] -= A_M * ((-(t_f as f64)*self.dt) / TAU_M).exp();
                         }
                     }
 
@@ -107,7 +104,7 @@ impl Neuron {
         let max_weight = self.weights.iter().fold(0.0/0.0, |m, v| v.max(m));
         for i in 0..inputs.len() {
             if self.weights[i] < MIN_W {
-                self.weights[i] = 0.0;
+                self.weights[i] = MIN_W;
             }else{
                 self.weights[i] /= max_weight;
             }
