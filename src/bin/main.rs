@@ -6,8 +6,8 @@ use rand::{thread_rng, Rng};
 
 fn main() {
 
-    let dt = 0.001;
-    let num_unit = 16;
+    let dt = 0.01;
+    let num_unit = 100;
     // let num_unit = 100;
     let data = snn_mnist::mnist::train_data_load(6000);
     let label = snn_mnist::mnist::train_label_load(6000);
@@ -16,14 +16,16 @@ fn main() {
 
     let mut layer = Vec::with_capacity(num_unit);
     for _ in 0..num_unit {
-        let mut neuron = snn_mnist::neuron::Neuron::new(-65.0, -65.0, -60.0, dt, 28*28, 1);
+        let mut neuron = snn_mnist::neuron::Neuron::new(
+            -65.0, -65.0, -60.0, dt, 28*28, 1
+        );
         layer.push(neuron);
     }
 
-    for n in 0..(6000*1) {
+    for n in 0..(6000*30) {
         let nn = n;
         let n = n % 6000;
-        // let n = n % 3;
+        // let n = n % 2 + 2;
         // let n = 0;
         let mut img: Vec<Vec<u8>> = Vec::with_capacity(28);
         for i in 0..28 {
@@ -31,22 +33,47 @@ fn main() {
             img.push(line);
         }
         let pot = snn_mnist::receptive_field::conv(&img, 28, 28);
-        let pot = snn_mnist::rate_coding::encode(&pot, 500.0, 28, 28);
+        let pot = snn_mnist::rate_coding::encode(&pot, 60.0, 28, 28);
 
         let mut input_spikes = Vec::with_capacity(28*28);
 
         for i in 0..28 {
             for j in 0..28 {
-                let p = snn_mnist::poisson_spike::generate_spike(pot[i][j], dt, 0.5);
+                let p = snn_mnist::poisson_spike::generate_spike(pot[i][j], dt, 0.3);
                 input_spikes.push(p);
             }
         }
 
-        let mut spike_cnts:Vec<u8> = Vec::with_capacity(num_unit);
-        let mut spike_historys = Vec::with_capacity(num_unit);
-        for i in 0..num_unit {
-            let spike_history = layer[i].run(&input_spikes);
-            spike_historys.push(spike_history);
+        let mut spike_historys = vec![Vec::new();num_unit];
+        for t in 0..input_spikes[0].len() {
+            let mut inputs = Vec::with_capacity(28*28);
+            for i in 0..(28*28) {
+                inputs.push(input_spikes[i][t]);
+            }
+            let mut spikes = Vec::with_capacity(28*28);
+            for i in 0..num_unit {
+                let spike = layer[i].run(&inputs);
+                spikes.push(spike);
+            }
+
+            let spikes_sum = spikes.iter().sum::<u8>();
+            if spikes_sum > 0 {
+                let spikes_tmp = spikes.clone();
+                let mut spikes_enu = spikes_tmp.iter().enumerate().collect::<Vec<(usize, &u8)>>();
+                thread_rng().shuffle(&mut spikes_enu);
+                let &(spike_neuron, _) = spikes_enu.iter().max_by(|&&(_, a), &&(_, b)| a.cmp(b)).unwrap();
+
+                for i in 0..num_unit {
+                    if i != spike_neuron {
+                        layer[i].v = -65.0;
+                        spikes[i] = 0;
+                    }
+                }
+            }
+
+            for i in 0..num_unit {
+                spike_historys[i].push(spikes[i]);
+            }
         }
 
 
@@ -129,6 +156,7 @@ fn main() {
         */
 
 
+        /*
         let mut winner_list = vec![0;num_unit];
         let t_len = spike_historys[0].len();
         for t in 0..spike_historys[0].len() {
@@ -146,7 +174,7 @@ fn main() {
             if max_spike > -60.0 {
                 for i in 0..num_unit {
                     if max_index != i {
-                        spike_historys[i][t] = -65.0;
+                        spike_historys[i][t] = -70.0;
                     }
                 }
             }
@@ -157,6 +185,7 @@ fn main() {
             }
             // println!("{:?}", layer[max_index].weights);
         }
+        */
 
         /*
         let (winner_index, cnt) = winner_list.iter().enumerate().max_by(|&(_, a), &(_, b)| a.cmp(b)).unwrap();
@@ -174,7 +203,7 @@ fn main() {
         */
 
         for i in 0..num_unit {
-            layer[i].update(&input_spikes,  &spike_historys[i], 500);
+            layer[i].update(&input_spikes,  &spike_historys[i], 10);
         }
 
         // println!("{:?}", winner_list);

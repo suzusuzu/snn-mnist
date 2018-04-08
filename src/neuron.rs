@@ -34,50 +34,39 @@ impl Neuron {
         }
     }
 
-    pub fn run(&mut self, inputs: &Vec<Vec<u8>>) -> Vec<f64> {
+    pub fn run(&mut self, input: &Vec<u8>) -> u8 {
+        let mut sum_v = 0.0;
 
-        let t_len = inputs[0].len();
-        let mut spike_history = vec![self.e_l; t_len];
-
-        for t in 0..t_len {
-            let mut spikes = Vec::with_capacity(inputs.len());
-            for i in 0..inputs.len() {
-                spikes.push(inputs[i][t]);
-            }
-
-            let mut sum_v = 0.0;
-
-            for i in 0..spikes.len() {
-                sum_v += self.weights[i]*(spikes[i] as f64);
-            }
-
-            let e_l = self.e_l;
-            let d_v = |y:f64| (e_l - y + sum_v);
-            self.v += rk4(d_v, self.v, self.dt);
-
-            if self.refractory_state > 0 {
-                self.refractory_state -= 1;
-                self.v = self.e_l;
-            }
-
-            if self.v >= self.theta {
-                spike_history[t] = self.v;
-                self.v = self.e_l;
-                self.refractory_state = self.refractory_period
-            }
+        for i in 0..input.len() {
+            sum_v += self.weights[i]*(input[i] as f64);
         }
 
-        spike_history
+        let e_l = self.e_l;
+        let d_v = |y:f64| (e_l - y + sum_v);
+
+        if self.refractory_state > 0 {
+            self.refractory_state -= 1;
+            self.v = self.e_l;
+        }else{
+            self.v += rk4(d_v, self.v, self.dt);
+        }
+
+        let mut spike = 0;
+        if self.v >= self.theta {
+            self.v = self.e_l;
+            self.refractory_state = self.refractory_period;
+            spike = 1;
+        }
+
+        spike
     }
 
-    pub fn update(&mut self, inputs: &Vec<Vec<u8>>, spike_history: &Vec<f64>, interval: usize) {
+    pub fn update(&mut self, inputs: &Vec<Vec<u8>>, spike_history: &Vec<u8>, interval: usize) {
         // stdp learning
 
-        // const TAU: f64 = 10.0;
         const EPSILON: f64 = 0.0001;
-        // const TAU: f64 = 0.03;
-        const TAU: f64 = 0.05;
-        const TAU_: f64 = 0.05;
+        const TAU: f64 = 0.005;
+        const TAU_: f64 = 0.005;
         const MAX_W: f64 = 1.0;
         const MIN_W: f64 = 0.0;
 
@@ -86,7 +75,7 @@ impl Neuron {
         for t in 0..t_len {
             for i in 0..inputs.len() {
 
-                if spike_history[t] >= self.theta {
+                if spike_history[t] == 1 {
 
                     // back
                     for j in 0..(interval as i64) {
@@ -94,15 +83,7 @@ impl Neuron {
                         if ((t as i64)+t_b) > 0 && inputs[i][((t as i64) +t_b) as usize] == 1 {
                             // update weight
                             // println!("{}",  1.0 * (((t_b as f64)*self.dt) / TAU_).exp() );
-                            self.weights[i] += 0.01 * (((t_b as f64)*self.dt) / TAU).exp();
-                            /*
-                            if self.weights[i] < MIN_W {
-                                self.weights[i] = MIN_W;
-                            }
-                            if self.weights[i] > MAX_W {
-                                self.weights[i] = MAX_W;
-                            }
-                            */
+                            self.weights[i] += 0.2 * (((t_b as f64)*self.dt) / TAU).exp();
                         }
                     }
 
@@ -112,15 +93,7 @@ impl Neuron {
                         let t_f = j + 1;
                         if (t+t_f) < t_len && inputs[i][t+t_f] == 1 {
                             // down weight
-                            self.weights[i] -= 0.01 * ((-(t_f as f64)*self.dt) / TAU_).exp();
-                            /*
-                            if self.weights[i] < MIN_W {
-                                self.weights[i] = MIN_W;
-                            }
-                            if self.weights[i] > MAX_W {
-                                self.weights[i] = MAX_W;
-                            }
-                            */
+                            self.weights[i] -= 0.15 * ((-(t_f as f64)*self.dt) / TAU_).exp();
                         }
                     }
 
