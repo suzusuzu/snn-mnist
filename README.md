@@ -1,7 +1,16 @@
 # snn-mnist
 
+## setup
+
 ```sh
-cargo run --release
+sh data.sh # get MNIST
+```
+
+
+## train
+
+```sh
+cargo run --release # output image*.png
 python plot_weight.py # plot weights
 ```
 
