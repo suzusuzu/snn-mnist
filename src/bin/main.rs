@@ -6,14 +6,14 @@ extern crate rayon;
 use rand::{Rng, SeedableRng, XorShiftRng};
 use rayon::prelude::*;
 
-use snn_mnist::mnist::{WIDTH, HEIGHT, NUM_PIXES, NUM_TRAIN};
+use snn_mnist::mnist::{WIDTH, HEIGHT, NUM_PIXES, NUM_TRAIN, NUM_TEST};
 
 fn main() {
 
-    const EPOCH: usize = 10;
+    const EPOCH: usize = 1;
     const DT: f64 = 0.01;
     const NUM_UNIT: usize = 100;
-    const RUN_TIME: f64 = 1.0;
+    const RUN_TIME: f64 = 2.0;
     const V_INIT: f64 = -65.0;
     const THETA: f64 = -60.0;
     const REFACTORY_PERIOD: usize = 1;
@@ -32,6 +32,9 @@ fn main() {
 
     // load MNIST
     let data = snn_mnist::mnist::train_data_load(NUM_TRAIN);
+    let labels = snn_mnist::mnist::train_label_load(NUM_TRAIN);
+    let test_data = snn_mnist::mnist::test_data_load(NUM_TEST);
+    let test_labels = snn_mnist::mnist::test_label_load(NUM_TEST);
 
     // add neuron
     let mut layer = Vec::with_capacity(NUM_UNIT);
@@ -104,10 +107,132 @@ fn main() {
         }
     }
 
+
+    // classification
+    let mut class_per_unit = vec![vec![0;10];NUM_UNIT];
+    for n in 0..NUM_TRAIN {
+        let mut img: Vec<Vec<u8>> = Vec::with_capacity(28);
+        for i in 0..28 {
+            let line = data[(i*WIDTH + n*NUM_PIXES)..((i+1)*WIDTH +n*NUM_PIXES)].to_vec();
+            img.push(line);
+        }
+        let pot = snn_mnist::receptive_field::conv(&img, WIDTH, HEIGHT);
+        let pot = snn_mnist::rate_coding::encode(&pot, MAX_FREQ, WIDTH, HEIGHT);
+
+        let mut input_spikes = Vec::with_capacity(NUM_PIXES);
+
+        for i in 0..WIDTH {
+            for j in 0..HEIGHT {
+                let p = snn_mnist::poisson_spike::generate_spike(pot[i][j], DT, RUN_TIME, &mut rng);
+                input_spikes.push(p);
+            }
+        }
+
+        let mut spike_historys = vec![Vec::new();NUM_UNIT];
+        for t in 0..input_spikes[0].len() {
+            let mut inputs = Vec::with_capacity(NUM_PIXES);
+            for i in 0..NUM_PIXES {
+                inputs.push(input_spikes[i][t]);
+            }
+            let mut spikes = Vec::with_capacity(NUM_PIXES);
+            for i in 0..NUM_UNIT {
+                let spike = layer[i].run(&inputs);
+                spikes.push(spike);
+            }
+
+            let spikes_sum = spikes.iter().sum::<u8>();
+            if spikes_sum > 0 {
+                let spikes_tmp = spikes.clone();
+                let mut spikes_enu = spikes_tmp.iter().enumerate().collect::<Vec<(usize, &u8)>>();
+                rng.shuffle(&mut spikes_enu);
+                let &(spike_neuron, _) = spikes_enu.iter().max_by(|&&(_, a), &&(_, b)| a.cmp(&b)).unwrap();
+
+                // winner take all
+                for i in 0..NUM_UNIT {
+                    if i != spike_neuron {
+                        layer[i].v = V_INIT;
+                        spikes[i] = 0;
+                    }
+                }
+            }
+
+            for i in 0..NUM_UNIT {
+                spike_historys[i].push(spikes[i]);
+            }
+        }
+        let max_spike_unit = spike_historys.iter().map(|spikes| spikes.iter().sum::<u8>()).enumerate().max_by(|&(_, a), &(_, b)|a.cmp(&b)).unwrap().0;
+        let label = labels[n];
+        class_per_unit[max_spike_unit][label as usize] += 1;
+    }
+
+    let class_per_unit = class_per_unit.iter().map(|hist| hist.iter().enumerate().max_by(|&(_, a), &(_, b)| a.cmp(&b)).unwrap().0).collect::<Vec<usize>>();
+
+    // test
+    let mut num_correct = 0;
+    for n in 0..NUM_TEST {
+        let mut img: Vec<Vec<u8>> = Vec::with_capacity(28);
+        for i in 0..28 {
+            let line = test_data[(i*WIDTH + n*NUM_PIXES)..((i+1)*WIDTH +n*NUM_PIXES)].to_vec();
+            img.push(line);
+        }
+        let pot = snn_mnist::receptive_field::conv(&img, WIDTH, HEIGHT);
+        let pot = snn_mnist::rate_coding::encode(&pot, MAX_FREQ, WIDTH, HEIGHT);
+
+        let mut input_spikes = Vec::with_capacity(NUM_PIXES);
+
+        for i in 0..WIDTH {
+            for j in 0..HEIGHT {
+                let p = snn_mnist::poisson_spike::generate_spike(pot[i][j], DT, RUN_TIME, &mut rng);
+                input_spikes.push(p);
+            }
+        }
+
+        let mut spike_historys = vec![Vec::new();NUM_UNIT];
+        for t in 0..input_spikes[0].len() {
+            let mut inputs = Vec::with_capacity(NUM_PIXES);
+            for i in 0..NUM_PIXES {
+                inputs.push(input_spikes[i][t]);
+            }
+            let mut spikes = Vec::with_capacity(NUM_PIXES);
+            for i in 0..NUM_UNIT {
+                let spike = layer[i].run(&inputs);
+                spikes.push(spike);
+            }
+
+            let spikes_sum = spikes.iter().sum::<u8>();
+            if spikes_sum > 0 {
+                let spikes_tmp = spikes.clone();
+                let mut spikes_enu = spikes_tmp.iter().enumerate().collect::<Vec<(usize, &u8)>>();
+                rng.shuffle(&mut spikes_enu);
+                let &(spike_neuron, _) = spikes_enu.iter().max_by(|&&(_, a), &&(_, b)| a.cmp(&b)).unwrap();
+
+                // winner take all
+                for i in 0..NUM_UNIT {
+                    if i != spike_neuron {
+                        layer[i].v = V_INIT;
+                        spikes[i] = 0;
+                    }
+                }
+            }
+
+            for i in 0..NUM_UNIT {
+                spike_historys[i].push(spikes[i]);
+            }
+        }
+        let max_spike_unit = spike_historys.iter().map(|spikes| spikes.iter().sum::<u8>()).enumerate().max_by(|&(_, a), &(_, b)|a.cmp(&b)).unwrap().0;
+        let label = test_labels[n];
+        if label == class_per_unit[max_spike_unit] as u8 {
+            num_correct += 1;
+        }
+    }
+
     // save weight
     for i in 0..NUM_UNIT {
         let max_weight = layer[i].weights.iter().fold(0.0/0.0, |m, v| v.max(m));
         let buf = layer[i].weights.iter().map(|&x| (x / max_weight * 255.0) as u8).collect::<Vec<u8>>();
         image::save_buffer(format!("image{}.png", i), &buf, WIDTH as u32, HEIGHT as u32, image::Gray(8)).unwrap()
     }
+
+
+    println!("acc: {}", (num_correct as f64) / (NUM_TEST as f64));
 }
