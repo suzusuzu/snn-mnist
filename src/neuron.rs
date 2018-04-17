@@ -65,8 +65,8 @@ impl Neuron {
 
         const TAU_P: f64 = 0.005;
         const TAU_M: f64 = 0.005;
-        const A_P: f64 = 0.5;
-        const A_M: f64 = 0.05;
+        const A_P: f64 = 0.8;
+        const A_M: f64 = 0.01;
         const MIN_W: f64 = 0.0;
 
         let t_len = inputs[0].len();
