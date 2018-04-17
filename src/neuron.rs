@@ -32,7 +32,7 @@ impl Neuron {
         }
     }
 
-    pub fn run(&mut self, input: &Vec<u8>) -> u8 {
+    pub fn run(&mut self, input: &Vec<u8>) -> (u8, f64) {
         let mut sum_v = 0.0;
 
         for i in 0..input.len() {
@@ -50,13 +50,14 @@ impl Neuron {
         }
 
         let mut spike = 0;
+        let v = self.v;
         if self.v >= self.theta {
             self.v = self.e_l;
             self.refractory_state = self.refractory_period;
             spike = 1;
         }
 
-        spike
+        (spike, v)
     }
 
     pub fn update(&mut self, inputs: &Vec<Vec<u8>>, spike_history: &Vec<u8>, interval: usize) {
@@ -64,7 +65,7 @@ impl Neuron {
 
         const TAU_P: f64 = 0.005;
         const TAU_M: f64 = 0.005;
-        const A_P: f64 = 0.1;
+        const A_P: f64 = 0.5;
         const A_M: f64 = 0.05;
         const MIN_W: f64 = 0.0;
 

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from PIL import ImageOps
 
-width = 10
+width = 30
 num_unit = width*width
 
 imgs = []
