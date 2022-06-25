@@ -5,5 +5,5 @@ authors = ["suzusuzu <suzuzusu123@icloud.com>"]
 
 [dependencies]
 rand = "0.4.2"
-image = "*"
+image = "0.22.5"
 rayon = "1.0"
