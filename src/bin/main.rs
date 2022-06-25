@@ -297,7 +297,7 @@ fn main() {
             &buf,
             WIDTH as u32,
             HEIGHT as u32,
-            image::Gray(8),
+            image::ColorType::L8,
         )
         .unwrap()
     }
